@@ -5,29 +5,52 @@
 	"repository": "https://github.com/Richienb/the-module.git",
 	"author": "Richie Bendall <richiebendall@gmail.com>",
 	"license": "MIT",
-	"main": "index.js",
+	"main": "dist/index.js",
 	"files": [
-		"index.js",
-		"index.d.ts"
+		"src/**/*",
+		"dist/**/*"
 	],
 	"engines": {
 		"node": ">=10"
 	},
 	"scripts": {
+		"docs": "typedoc",
+		"build": "tsc && yarn docs",
+		"dev": "yarn tsc --watch",
 		"lint": "xo",
 		"test": "yarn lint && ava"
 	},
 	"keywords": [],
-	"dependencies": {},
+	"dependencies": {
+		"@types/web-bluetooth": "^0.0.5",
+		"cross-bluetooth": "^1.0.0",
+		"events": "^3.1.0",
+		"ow": "^0.15.0",
+		"p-map": "^3.0.0",
+		"type-fest": "^0.8.1",
+		"ws": "^7.2.1"
+	},
 	"devDependencies": {
 		"ava": "^3.0.0",
 		"eslint-config-richienb": "^0.3.0",
+		"ts-node": "^8.6.2",
+		"typedoc": "^0.16.6",
+		"typescript": "^3.7.5",
 		"xo": "^0.25.3"
 	},
 	"resolutions": {
 		"eslint": "^6.8.0"
 	},
 	"xo": {
-		"extends": "richienb/node"
+		"extends": "richienb/ts"
+	},
+	"ava": {
+		"compileEnhancements": false,
+		"extensions": [
+			"ts"
+		],
+		"require": [
+			"ts-node/register"
+		]
 	}
 }

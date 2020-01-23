@@ -1,5 +1,5 @@
 const test = require("ava")
-const theModule = require(".")
+const theModule = require("./src")
 
 test("main", (t) => {
 	t.throws(() => {
