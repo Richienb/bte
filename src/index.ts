@@ -1,77 +1,48 @@
 "use strict"
 
-///<reference types="web-bluetooth"/>
-
 import bluetooth from "cross-bluetooth"
 import ow from "ow"
 import { MergeExclusive } from "type-fest"
 import EventEmitter from "events"
 import pMap from "p-map"
 
-class Descriptor {
-	public readonly uuid: string
-	public readonly value: DataView
-	constructor(private readonly _descriptor: BluetoothRemoteGATTDescriptor) {
-		this.uuid = _descriptor.uuid
-		this.value = _descriptor.value
-	}
-
-	public async read(): Promise<DataView> {
-		return await this._descriptor.readValue()
-	}
-
-	public async write(value: BufferSource): Promise<void> {
-		return await this._descriptor.writeValue(value)
-	}
-}
-
-class Characteristic extends EventEmitter {
-	public readonly uuid: string
-	public readonly properties: BluetoothCharacteristicProperties
-	public readonly value: DataView
-	constructor(private readonly _characteristic: BluetoothRemoteGATTCharacteristic) {
-		super()
-		_characteristic.addEventListener("characteristicvaluechanged", async () => this.emit("valuechanged", await _characteristic.readValue()))
-		this.uuid = _characteristic.uuid
-		this.properties = _characteristic.properties
-		this.value = _characteristic.value
-	}
-
-	public async read(): Promise<void> {
-		await this._characteristic.readValue()
-	}
-
-	public async write(value: BufferSource): Promise<void> {
-		await this._characteristic.writeValue(value)
-	}
-
-	public async descriptors() {
-		return pMap(await this._characteristic.getDescriptors(), v => new Descriptor(v))
-	}
-}
-
-class Service extends EventEmitter {
-	public readonly uuid: string
-	public readonly isPrimary: boolean
-	public readonly characteristics: Characteristic[]
-
-	constructor(service: BluetoothRemoteGATTService, characteristics: BluetoothRemoteGATTCharacteristic[]) {
-		super()
-		service.addEventListener("serviceadded", (data) => super.emit("added", data))
-		service.addEventListener("servicechanged", (data) => super.emit("changed", data))
-		service.addEventListener("serviceremoved", (data) => super.emit("removed", data))
-		this.uuid = service.uuid
-		this.isPrimary = service.isPrimary
-		this.characteristics = characteristics.map(v => new Characteristic(v))
-	}
-}
-
-export async function request(options: MergeExclusive<{
+/**
+ * An elegant Bluetooth interface.
+ * @param options Options.
+ * @example
+ * ```
+ * const bte = require("bte");
+ *
+ * (async () => {
+ * 	// Request Bluetooth device
+ * 	const device = await bte({ services: ["battery_service"] });
+ *
+ * 	// Get battery service
+ * 	const service = await device.getService("battery_service");
+ *
+ * 	// Get battery level characteristic
+ * 	const characteristic = await service.getCharacteristic("battery_level");
+ *
+ * 	// Get battery level
+ * 	const value = await characteristic.read();
+ *
+ * 	// Parse battery level
+ * 	const batteryLevel = value.getUint8(0);
+ * 	console.log(`The current battery level is ${batteryLevel}.`);
+ * })();
+ * ```
+*/
+async function bte(options: MergeExclusive<{
+	/** The name to match. */
 	name?: string
 }, {
+	/** The name prefix to match. */
 	namePrefix?: string
 }> & {
+	/** The services to match. */
 	services?: BluetoothServiceUUID[],
+
+	/** Optional services. */
 	optionalServices?: BluetoothServiceUUID[]
 } = {}) {
 	ow(options, ow.optional.object.exactShape({
@@ -81,7 +52,7 @@ export async function request(options: MergeExclusive<{
 		optionalServices: ow.optional.array
 	}))
 
-	if (!await isReady()) throw Error("Not ready to connect to a device.")
+	if (!await bte.isReady()) throw Error("Not ready to connect to a device.")
 
 	const { id, name, gatt } = await bluetooth.requestDevice(
 		(options.name || options.namePrefix || options.services) ? {
@@ -93,18 +64,65 @@ export async function request(options: MergeExclusive<{
 			}
 	)
 
-	const services = await pMap(await gatt.getPrimaryServices(), async service => new Service(service, await service.getCharacteristics()))
+	const device = await gatt.connect()
+
+	async function toDescriptor(descriptor: BluetoothRemoteGATTDescriptor) {
+		return {
+			uuid: descriptor.uuid,
+			value: descriptor.value,
+			read: () => descriptor.readValue(),
+			write: () => descriptor.writeValue,
+		}
+	}
+
+	async function toCharacteristic(characteristic: BluetoothRemoteGATTCharacteristic) {
+		const emitter = new EventEmitter()
+		characteristic.addEventListener("characteristicvaluechanged", async () => emitter.emit("changed", await characteristic.readValue()))
+
+		return {
+			uuid: characteristic.uuid,
+			value: characteristic.value,
+			read: () => characteristic.readValue(),
+			write: () => characteristic.writeValue,
+			async getDescriptor(descriptor: BluetoothDescriptorUUID) {
+				return toDescriptor(await characteristic.getDescriptor(descriptor))
+			},
+			async getDescriptors(descriptor?: BluetoothDescriptorUUID) {
+				return pMap(await characteristic.getDescriptors(descriptor), (obj) => toDescriptor(obj))
+			},
+			...emitter
+		}
+	}
+
+	async function toService(service: BluetoothRemoteGATTService) {
+		return {
+			uuid: service.uuid,
+			isPrimary: service.uuid,
+			async getCharacteristic(characteristic: BluetoothServiceUUID) {
+				return toCharacteristic(await service.getCharacteristic(characteristic))
+			},
+			async getCharacteristics(characteristic?: BluetoothServiceUUID) {
+				return pMap(await service.getCharacteristics(characteristic), (obj) => toCharacteristic(obj))
+			},
+		}
+	}
 
 	return {
 		id,
 		name,
-		gatt: await gatt.connect(),
-		services,
-		primaryService: services.filter(({ isPrimary }) => isPrimary)[0],
-		disconnect: gatt.disconnect,
+		async getService(service: BluetoothServiceUUID) {
+			return toService(await device.getPrimaryService(service))
+		},
+		async getServices(service?: BluetoothServiceUUID) {
+			return pMap(await device.getPrimaryServices(service), (obj) => toService(obj))
+		}
 	}
 }
 
-export async function isReady() {
-	return await bluetooth.getAvailability()
+namespace bte {
+	export async function isReady() {
+		return await bluetooth.getAvailability()
+	}
 }
+
+export = bte

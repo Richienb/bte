@@ -1,8 +1,8 @@
 {
-	"name": "the-module",
+	"name": "bte",
 	"version": "0.0.0",
-	"description": "My awesome module.",
-	"repository": "https://github.com/Richienb/the-module.git",
+	"description": "An elegant Bluetooth interface.",
+	"repository": "https://github.com/Richienb/bte.git",
 	"author": "Richie Bendall <richiebendall@gmail.com>",
 	"license": "MIT",
 	"main": "dist/index.js",
@@ -22,13 +22,11 @@
 	},
 	"keywords": [],
 	"dependencies": {
-		"@types/web-bluetooth": "^0.0.5",
 		"cross-bluetooth": "^1.0.0",
 		"events": "^3.1.0",
 		"ow": "^0.15.0",
 		"p-map": "^3.0.0",
-		"type-fest": "^0.8.1",
-		"ws": "^7.2.1"
+		"type-fest": "^0.8.1"
 	},
 	"devDependencies": {
 		"ava": "^3.0.0",
